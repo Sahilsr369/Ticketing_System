@@ -1,0 +1,44 @@
+{
+  "name": "IT Helpdesk – Dev Container",
+
+  // Use docker-compose so we get a Postgres sidecar automatically
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  // Forward the backend and frontend ports
+  "forwardPorts": [3000, 5000, 5432],
+  "portsAttributes": {
+    "3000": { "label": "React Frontend", "onAutoForward": "openBrowser" },
+    "5000": { "label": "Express API",    "onAutoForward": "notify" },
+    "5432": { "label": "PostgreSQL",     "onAutoForward": "ignore" }
+  },
+
+  // Runs once after the container is created (installs deps + migrates DB)
+  "postCreateCommand": "bash /workspace/scripts/setup.sh",
+
+  // Useful VS Code extensions pre-installed in the container
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "christian-kohler.path-intellisense",
+        "formulahendry.auto-rename-tag",
+        "dsznajder.es7-react-js-snippets"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "remoteUser": "node"
+}

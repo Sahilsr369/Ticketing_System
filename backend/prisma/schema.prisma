@@ -1,0 +1,303 @@
+// Prisma Schema — IT Ticketing System
+// Phase 9: Production Readiness — indexes, audit log, GDPR fields
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  IT_MANAGER
+  IT_TECHNICIAN
+  REPORTING_USER
+  STANDARD_USER
+}
+
+enum TicketStatus {
+  LOGGED
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ActivityEventType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  TICKET_UNASSIGNED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  FIELD_UPDATED
+  COMMENT_ADDED
+  INTERNAL_NOTE
+  EMAIL_SENT
+  EMAIL_RECEIVED
+  TICKET_CLOSED
+  TICKET_REOPENED
+}
+
+enum EmailDirection {
+  SENT
+  RECEIVED
+}
+
+model SlaPolicy {
+  id                   Int            @id @default(autoincrement())
+  priority             TicketPriority @unique
+  firstResponseMinutes Int            @map("first_response_minutes")
+  resolutionMinutes    Int            @map("resolution_minutes")
+  active               Boolean        @default(true)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt      @map("updated_at")
+
+  @@map("sla_policies")
+}
+
+model Category {
+  id            Int           @id @default(autoincrement())
+  name          String        @unique
+  slug          String        @unique
+  sortOrder     Int           @default(0) @map("sort_order")
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  subcategories Subcategory[]
+  tickets       Ticket[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id         Int       @id @default(autoincrement())
+  categoryId Int       @map("category_id")
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name       String
+  slug       String
+  sortOrder  Int       @default(0) @map("sort_order")
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tickets    Ticket[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId])
+  @@map("subcategories")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(STANDARD_USER)
+  active       Boolean   @default(true)
+
+  deletedAt    DateTime? @map("deleted_at")
+  anonymisedAt DateTime? @map("anonymised_at")
+
+  lastLoginAt  DateTime? @map("last_login_at")
+  lastLoginIp  String?   @map("last_login_ip")
+  loginCount   Int       @default(0) @map("login_count")
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt      @map("updated_at")
+
+  submittedTickets Ticket[]       @relation("SubmittedBy")
+  assignedTickets  Ticket[]       @relation("AssignedTo")
+  comments         Comment[]
+  activityLogs     ActivityLog[]
+  ticketHistories  TicketHistory[]
+  sentEmails       TicketEmail[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+
+  @@index([email])
+  @@index([role, active])
+  @@map("users")
+}
+
+model Ticket {
+  id            String         @id @default(uuid())
+  ticketNumber  String         @unique @map("ticket_number")
+  title         String
+  description   String
+  status        TicketStatus   @default(LOGGED)
+  priority      TicketPriority @default(MEDIUM)
+
+  categoryId    Int?           @map("category_id")
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  subcategoryId Int?           @map("subcategory_id")
+  subcategory   Subcategory?   @relation(fields: [subcategoryId], references: [id])
+
+  department    String?
+  floor         String?
+  usersAffected Int      @default(1) @map("users_affected")
+
+  incidentTime    DateTime? @map("incident_time")
+  firstResponseAt DateTime? @map("first_response_at")
+  resolvedAt      DateTime? @map("resolved_at")
+  closedAt        DateTime? @map("closed_at")
+  dueAt           DateTime? @map("due_at")
+
+  slaBreached           Boolean @default(false) @map("sla_breached")
+  firstResponseBreached Boolean @default(false) @map("first_response_breached")
+
+  submittedById String  @map("submitted_by_id")
+  submittedBy   User    @relation("SubmittedBy", fields: [submittedById], references: [id])
+  assignedToId  String? @map("assigned_to_id")
+  assignedTo    User?   @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  comments     Comment[]
+  attachments  Attachment[]
+  activityLogs ActivityLog[]
+  history      TicketHistory[]
+  emails       TicketEmail[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToId])
+  @@index([submittedById])
+  @@index([categoryId])
+  @@index([createdAt])
+  @@index([status, priority])
+  @@index([slaBreached, status])
+  @@map("tickets")
+}
+
+model TicketEmail {
+  id          String         @id @default(uuid())
+  ticketId    String         @map("ticket_id")
+  ticket      Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  direction   EmailDirection
+  fromAddress String         @map("from_address")
+  toAddress   String         @map("to_address")
+  cc          String?
+  subject     String
+  body        String
+  bodyHtml    String?        @map("body_html")
+  messageId   String?        @unique @map("message_id")
+  inReplyTo   String?        @map("in_reply_to")
+  sentAt      DateTime       @map("sent_at")
+  sentById    String?        @map("sent_by_id")
+  sentBy      User?          @relation(fields: [sentById], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([ticketId, sentAt])
+  @@map("ticket_emails")
+}
+
+model ActivityLog {
+  id         String            @id @default(uuid())
+  ticketId   String?           @map("ticket_id")
+  ticket     Ticket?           @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  userId     String?           @map("user_id")
+  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  eventType  ActivityEventType @default(FIELD_UPDATED) @map("event_type")
+  action     String
+  detail     String?
+  metadata   Json?
+  isInternal Boolean           @default(false) @map("is_internal")
+
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  @@index([ticketId, createdAt])
+  @@index([userId, createdAt])
+  @@index([eventType])
+  @@map("activity_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  success    Boolean  @default(true)
+  detail     String?
+  createdAt  DateTime @default(now())  @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model TicketHistory {
+  id                             String        @id @default(uuid())
+  ticketId                       String        @map("ticket_id")
+  ticket                         Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  previousStatus                 TicketStatus? @map("previous_status")
+  newStatus                      TicketStatus  @map("new_status")
+  changedById                    String?       @map("changed_by_id")
+  changedBy                      User?         @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt                      DateTime      @default(now()) @map("changed_at")
+  durationInPreviousStateSeconds Int?          @map("duration_in_previous_state_seconds")
+  note                           String?
+
+  @@index([ticketId])
+  @@map("ticket_history")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  internal  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@index([ticketId])
+  @@map("comments")
+}
+
+model Attachment {
+  id           String   @id @default(uuid())
+  ticketId     String   @map("ticket_id")
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("attachments")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}

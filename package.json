@@ -1,0 +1,21 @@
+{
+  "name": "it-ticketing-system",
+  "version": "1.0.0",
+  "description": "IT Ticketing System — Monorepo Root",
+  "private": true,
+  "scripts": {
+    "setup":           "bash scripts/setup.sh",
+    "dev:backend":     "cd backend && npm run dev",
+    "dev:frontend":    "cd frontend && npm start",
+    "install:all":     "cd backend && npm install && cd ../frontend && npm install",
+    "db:migrate":      "cd backend && npm run db:migrate",
+    "db:migrate:prod": "cd backend && npx prisma migrate deploy",
+    "db:generate":     "cd backend && npm run db:generate",
+    "db:seed":         "cd backend && npm run db:seed",
+    "db:studio":       "cd backend && npx prisma studio",
+    "build:frontend":  "cd frontend && npm run build",
+    "docker:up":       "docker compose up -d",
+    "docker:down":     "docker compose down",
+    "docker:logs":     "docker compose logs -f db"
+  }
+}
