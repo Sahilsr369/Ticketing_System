@@ -25,6 +25,7 @@ export function useUsers(initialFilters = {}) {
     }
   }, [filters]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetch(); }, []);   // initial load
 
   const refetch     = () => fetch(filters);
