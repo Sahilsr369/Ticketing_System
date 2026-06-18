@@ -54,7 +54,7 @@ app.use(cors({
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: NODE_ENV === 'production' ? 300 : 500,
+  max: NODE_ENV === "production" ? 1000 : 500,
   standardHeaders: true, legacyHeaders: false,
   message: { success: false, error: { message: 'Too many requests' } },
 });
